@@ -9,7 +9,7 @@
 
     <logger name="kafka" level="info"/>
     <logger name="org.apache.kafka" level="info"/>
-    <logger name="greyhound" level="warn"/>
+    <logger name="greyhound" level="info"/>
 
     <root level="error">
         <appender-ref ref="STDOUT"/>

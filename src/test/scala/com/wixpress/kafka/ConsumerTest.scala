@@ -2,15 +2,14 @@ package com.wixpress.kafka
 
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.wixpress.greyhound.KafkaDriver
-import com.wixpress.greyhound.config.GreyhoundConfig
-import com.wixpress.greyhound.producer.ProduceTarget.toPartition
-import com.wixpress.greyhound.producer.builder.ProducerMaker.aProducer
+import com.wixpress.greyhound.config.{GreyhoundConfig, KafkaProducerConfig}
+import com.wixpress.greyhound.{KafkaDriver, KafkaProducerFactory}
+import com.wixpress.iptf.AtomicSeq
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.joda.time.DateTime
 import org.specs2.mutable.SpecificationWithJUnit
 import org.specs2.specification.Scope
 
-import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
 
 class ConsumerTest extends SpecificationWithJUnit {
@@ -38,8 +37,9 @@ class ConsumerTest extends SpecificationWithJUnit {
     }
 
     "process messages in parallel" in new Context {
+      override val numOfPartitions = 10
       admin.createTopicIfNotExists("topic2", numOfPartitions)
-      val numOfMessages = 3
+      val numOfMessages = 10
       val counter = new AtomicInteger(0)
 
       val consumer = new Consumer(config.kafkaBrokers, "myGroup2", "topic2")(
@@ -51,7 +51,7 @@ class ConsumerTest extends SpecificationWithJUnit {
       )
 
       consumer.startConsuming()
-      produceMessages("topic2", numOfMessages)
+      produceMessages("topic2", numOfMessages, blocking = false)
 
       eventually(2, 1.second) {
         counter.get === numOfMessages
@@ -62,12 +62,13 @@ class ConsumerTest extends SpecificationWithJUnit {
       override val numOfPartitions = 100
       admin.createTopicIfNotExists("topic3", numOfPartitions)
       val numOfMessages = 500
-      val counter = new AtomicInteger(0)
+      val counter = new AtomicSeq[Int]
 
-      def makeConsumer() = new Consumer2(config.kafkaBrokers, "myGroup3", "topic3")(msg => {
-        Thread.sleep(150)
-        println(DateTime.now + " finished sleeping...")
-        counter.incrementAndGet()
+      def makeConsumer() = new Consumer(config.kafkaBrokers, "myGroup3", "topic3")(msg => {
+        println(Thread.currentThread().getId + s" handling $msg")
+        Thread.sleep(500)
+        counter.addAndGet(msg.toInt)
+        println(Thread.currentThread().getId + s" finished $msg")
       })
 
       val consumer1 = makeConsumer()
@@ -78,10 +79,11 @@ class ConsumerTest extends SpecificationWithJUnit {
 
       // === NOW TRIGGER RE-BALANCE
       consumer2.startConsuming(sleepSome = false)
-      produceMessages("topic3", numOfMessages / 2)
+      produceMessages("topic3", numOfMessages / 2, blocking = false, from = numOfMessages / 2)
 
-      eventually(10, 1.second) {
-        counter.get === numOfMessages
+      eventually(20, 1.second) {
+        println(counter.get.sorted.mkString(","))
+        counter.get.sorted === (0 until numOfMessages).sorted
       }
     }
   }
@@ -90,13 +92,13 @@ class ConsumerTest extends SpecificationWithJUnit {
     val numOfPartitions = 3
     val numOfMessages: Int
 
-    private lazy val producer = aProducer().buffered.ordered.build
+    private lazy val kafkaProducer = KafkaProducerFactory.aProducer(KafkaProducerConfig(config.kafkaBrokers, ""))
 
-    def produceMessages(topic: String, numOfMessages: Int, blocking: Boolean = true): Unit = {
-      (0 until numOfMessages).foreach { i =>
-        val future = producer.produceToTopic(topic, "SomeMessage", toPartition(i % numOfPartitions))
+    def produceMessages(topic: String, numOfMessages: Int, blocking: Boolean = true, from: Int = 0): Unit = {
+      (from until (from + numOfMessages)).foreach { i =>
+        val future = kafkaProducer.send(new ProducerRecord[String, String](topic, new Integer(i % numOfPartitions), null, i.toString))
         if (blocking)
-          Await.ready(future, 1.second)
+          future.get()
       }
     }
   }
