@@ -32,7 +32,7 @@ class Consumer(brokers: String, groupId: String, topic: String)(callback: String
       while (running) {
         val records = consumer.poll(10)
         records.asScala.foreach { record =>
-          new Thread(() => callback(record.value())).start()
+          callback(record.value())
           consumer.commitSync(Map(new TopicPartition(record.topic, record.partition) -> new OffsetAndMetadata(record.offset + 1)))
         }
       }
