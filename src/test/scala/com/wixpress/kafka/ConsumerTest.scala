@@ -65,8 +65,10 @@ class ConsumerTest extends SpecificationWithJUnit {
       val counter = new AtomicSeq[Int]
 
       def makeConsumer() = new Consumer(config.kafkaBrokers, "myGroup3", "topic3")(msg => {
+        println(Thread.currentThread().getId + s" handling $msg")
         Thread.sleep(500)
         counter.addAndGet(msg.toInt)
+        println(Thread.currentThread().getId + s" finished $msg")
       })
 
       val consumer1 = makeConsumer()
