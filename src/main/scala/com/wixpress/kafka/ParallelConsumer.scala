@@ -58,7 +58,6 @@ class ParallelConsumer(brokers: String, groupId: String, topic: String)(callback
     if (sleepSome) Thread.sleep(2000)
   }
 
-
   def createRebalanceListener(workers: ConcurrentHashMap[Int, WorkerThread]): ConsumerRebalanceListener =
     new ConsumerRebalanceListener {
       override def onPartitionsRevoked(collection: util.Collection[TopicPartition]): Unit = {
@@ -111,7 +110,7 @@ class ParallelConsumer(brokers: String, groupId: String, topic: String)(callback
   sys.addShutdownHook(stop())
 }
 
-class WorkerThread(f: ConsumerRecord[String, String] => Unit) extends Runnable {
+class WorkerThread(callback: ConsumerRecord[String, String] => Unit) extends Runnable {
   private val queue = new ArrayBlockingQueue[ConsumerRecord[String, String]](10000)
   private val semaphore = new Semaphore(1)
 
@@ -134,13 +133,11 @@ class WorkerThread(f: ConsumerRecord[String, String] => Unit) extends Runnable {
 
   override def run(): Unit = {
     while (true) {
-
-
       val got = queue.poll(1000, TimeUnit.MILLISECONDS)
       for {
         msg <- Option(got)
         _ = semaphore.acquire(1)
-        _ = f(msg)
+        _ = callback(msg)
       } yield semaphore.release(1)
     }
   }
