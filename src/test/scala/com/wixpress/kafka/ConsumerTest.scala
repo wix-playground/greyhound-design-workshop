@@ -53,7 +53,7 @@ class ConsumerTest extends SpecificationWithJUnit {
       consumer.startConsuming()
       produceMessages("topic2", numOfMessages, blocking = false)
 
-      eventually(2, 1.second) {
+      eventually(2500, 1.millis) {
         counter.get === numOfMessages
       }
     }

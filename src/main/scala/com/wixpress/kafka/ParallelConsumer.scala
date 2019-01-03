@@ -16,7 +16,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 
-class ConsumerWorking(brokers: String, groupId: String, topic: String)(callback: String => Unit) {
+class ParallelConsumer(brokers: String, groupId: String, topic: String)(callback: String => Unit) {
   implicit private val ec = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor())
   private val props = javaProperties(
     "bootstrap.servers" → brokers,
